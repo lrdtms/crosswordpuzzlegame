@@ -7,25 +7,41 @@
   <title>Crossword Builder</title>
   <style>
     :root{--cell-size:36px}
-    body{font-family:Segoe UI,Arial,sans-serif;margin:12px;background:#f7fafc;color:#0f172a}
-    .container{max-width:980px;margin:0 auto}
-    .panel{background:#fff;padding:12px;border-radius:8px;box-shadow:0 1px 3px rgba(2,6,23,0.06);margin-bottom:12px}
-    .controls{display:flex;gap:8px;flex-wrap:wrap}
-    input[type=text],select,button{padding:8px;border:1px solid #e2e8f0;border-radius:6px}
-    button{background:#2563eb;color:#fff;border:none}
-    #grid{display:grid;gap:4px;background:transparent;margin-top:12px}
-    .cell{width:var(--cell-size);height:var(--cell-size);text-align:center;font-weight:700;border:1px solid #cbd5e1;background:#fff}
-    .cell[disabled]{background:#cbd5e1}
-    .clues{display:flex;gap:24px;flex-wrap:wrap;margin-top:12px}
-    .clues ul{margin:0;padding:0;list-style:none}
+    /* Minimal, clean UI */
+    body{font-family:Inter,Segoe UI,Arial,sans-serif;margin:18px;background:#ffffff;color:#0f172a}
+    .container{max-width:880px;margin:8px auto}
+    .panel{background:transparent;padding:8px;margin-bottom:10px}
+    /* setup controls - subtle */
+    .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    input[type=text],select,button{padding:8px;border:1px solid #e6e9ef;border-radius:6px;background:#fff}
+    button{background:transparent;border:1px solid transparent;color:#0b61d1;cursor:pointer}
+    button:hover{background:rgba(11,97,209,0.06)}
+    #grid{display:grid;gap:4px;background:transparent;margin:12px auto}
+    /* cell visual - clean and subtle */
+  .cell{width:var(--cell-size);height:var(--cell-size);text-align:center;font-weight:600;border:1px solid #e6e9ef;background:#fff;border-radius:4px;font-size:1rem;display:flex;align-items:center;justify-content:center}
+    .cell[disabled]{background:#f3f4f6;border-color:#e8eaf0}
+  /* ensure input elements fill their grid cell exactly */
+  input.cell{width:100%;height:100%;box-sizing:border-box;padding:0;margin:0;border:0;background:transparent;font-weight:600;text-align:center;font-size:1rem}
+    .clues{display:flex;gap:20px;flex-wrap:wrap;margin-top:8px;color:#374151}
+    .clues ul{margin:0;padding:0;list-style:none;font-size:0.95rem}
     @media (max-width:640px){:root{--cell-size:24px}}
-    .word-item{display:flex;justify-content:space-between;padding:6px;background:#f8fafc;margin-bottom:4px;border-radius:6px}
-    .number{position:absolute;top:2px;left:4px;font-size:0.6em;color:#333}
-  /* highlight states for user input */
-  .cell.correct{background:#dcfce7;color:#064e3b;border-color:#86efac}
-  .cell.incorrect{background:#fee2e2;color:#7f1d1d;border-color:#fca5a5;animation:incorrect-pulse 450ms ease}
-  @keyframes incorrect-pulse{0%{transform:translateY(0)}25%{transform:translateY(-2px)}50%{transform:translateY(0)}75%{transform:translateY(-1px)}100%{transform:translateY(0)}}
-  .cell{transition:background-color 160ms ease,border-color 160ms ease,transform 120ms ease}
+    .word-item{display:flex;justify-content:space-between;padding:6px;background:transparent;margin-bottom:4px;border-radius:6px}
+    .number{position:absolute;top:3px;left:4px;font-size:0.62em;color:#6b7280}
+    /* highlight states for user input */
+    .cell.correct{background:#ecfdf5;color:#065f46;border-color:#bbf7d0}
+    .cell.incorrect{background:#fff1f2;color:#7f1d1d;border-color:#fecaca}
+    @keyframes incorrect-pulse{0%{transform:translateY(0)}25%{transform:translateY(-2px)}50%{transform:translateY(0)}75%{transform:translateY(-1px)}100%{transform:translateY(0)}}
+    .cell{transition:background-color 160ms ease,border-color 160ms ease,transform 120ms ease}
+
+    /* Game-specific minimal layout */
+    #game{display:block}
+    #game .panel{padding:0}
+    #grid{margin:16px auto}
+    /* center the clues and make compact */
+    .clues{margin-top:12px;gap:28px}
+    .clues strong{display:block;color:#111827;margin-bottom:6px;font-weight:600}
+    #winner{border-radius:6px;padding:8px;font-weight:700}
+  /* placement grid uses same cell sizing as main grid */
   </style>
 </head>
 <body>
@@ -38,10 +54,15 @@
         <input id="clue" type="text" placeholder="Clue" />
         <select id="direction"><option value="across">Across</option><option value="down">Down</option></select>
         <button id="add">Add</button>
-        <button id="generate">Generate</button>
+        <button id="generate">Start Game</button>
+        <button id="manualPlace">Manual Place</button>
         <button id="reset">Reset</button>
       </div>
       <div id="wordList" style="margin-top:8px"></div>
+      <div id="placementArea" style="margin-top:8px;display:none">
+        <div style="margin-bottom:6px;font-size:0.95em;color:#333">Placement mode: select a word from the list and click a grid cell to place its starting square (direction is set when you add the word).</div>
+        <div id="placementGrid"></div>
+      </div>
     </div>
 
     <div id="game" class="panel" style="display:none">
@@ -58,22 +79,50 @@
   </div>
 
   <script>
-    const GRID_SIZE = 15;
-    let words = []; // {word,clue,direction}
-    let grid = [];
-    let numbers = [];
-    let acrossClues = [];
-    let downClues = [];
+  const GRID_SIZE = 15;
+  let words = []; // {word,clue,direction,placed,row,col}
+  let grid = [];
+  let numbers = [];
+  let acrossClues = [];
+  let downClues = [];
+  let manualMode = false;
+  let selectedForPlacement = null; // index in words
+  let gameStarted = false;
+  let owners = []; // per-cell array of word ids occupying that cell
+  let nextWordId = 1;
 
     function createEmptyGrid(){
-      grid = Array.from({length:GRID_SIZE},()=>Array(GRID_SIZE).fill(0));
-      numbers = Array.from({length:GRID_SIZE},()=>Array(GRID_SIZE).fill(0));
+  grid = Array.from({length:GRID_SIZE},()=>Array(GRID_SIZE).fill(0));
+  numbers = Array.from({length:GRID_SIZE},()=>Array(GRID_SIZE).fill(0));
+  owners = Array.from({length:GRID_SIZE},()=>Array.from({length:GRID_SIZE},()=>[]));
     }
 
     function renderWordList(){
       const el = document.getElementById('wordList');
-      el.innerHTML = words.map((w,i)=>`<div class="word-item"><div>${i+1}. ${w.word} (${w.direction}) — ${w.clue}</div><div><button data-i="${i}" class="remove">Remove</button></div></div>`).join('');
-      for(const btn of el.querySelectorAll('.remove')) btn.addEventListener('click',e=>{words.splice(+e.target.dataset.i,1);renderWordList();});
+      el.innerHTML = '';
+      words.forEach((w,i)=>{
+        const row = document.createElement('div'); row.className = 'word-item';
+        const left = document.createElement('div'); left.textContent = `${i+1}. ${w.word} (${w.direction}) — ${w.clue}`;
+        const right = document.createElement('div');
+
+        if(w.placed){
+          const span = document.createElement('span'); span.style.fontSize='0.9em'; span.style.color='#065f46'; span.textContent = `Placed @ ${w.row+1},${w.col+1}`;
+          right.appendChild(span);
+        } else {
+          const placeBtn = document.createElement('button'); placeBtn.textContent = 'Place'; placeBtn.className='place';
+          placeBtn.style.marginRight = '6px';
+          placeBtn.addEventListener('click',()=>{ selectedForPlacement = i; renderPlacementGrid(); renderWordList(); });
+          right.appendChild(placeBtn);
+        }
+
+        const removeBtn = document.createElement('button'); removeBtn.textContent = 'Remove'; removeBtn.addEventListener('click',()=>{ words.splice(i,1); renderWordList(); renderPlacementGrid(); });
+        right.appendChild(removeBtn);
+
+        // highlight selected
+        if(selectedForPlacement===i){ row.style.outline='2px solid rgba(11,97,209,0.12)'; }
+
+        row.appendChild(left); row.appendChild(right); el.appendChild(row);
+      });
     }
 
     function addWord(){
@@ -82,9 +131,66 @@
       const d = document.getElementById('direction').value;
       if(!w||!c) return alert('Enter word and clue');
       if(!/^[A-Z]+$/.test(w)) return alert('Word must be letters only');
-      words.push({word:w,clue:c,direction:d});
+  words.push({id: nextWordId++, word:w,clue:c,direction:d,placed:false,row:null,col:null});
       document.getElementById('word').value='';document.getElementById('clue').value='';document.getElementById('word').focus();
       renderWordList();
+    }
+
+    function enableManualPlacement(){
+      manualMode = !manualMode;
+      document.getElementById('placementArea').style.display = manualMode? 'block' : 'none';
+      selectedForPlacement = null;
+      // reset any temporary grid view
+      renderPlacementGrid();
+      renderWordList();
+    }
+
+    function renderPlacementGrid(){
+      const container = document.getElementById('placementGrid');
+      container.innerHTML='';
+      container.style.display='grid';
+      container.style.gridTemplateColumns = `repeat(${GRID_SIZE}, var(--cell-size))`;
+      container.style.gap = '4px';
+      for(let r=0;r<GRID_SIZE;r++){
+        for(let c=0;c<GRID_SIZE;c++){
+          const val = grid[r][c];
+          const cell = document.createElement('div');
+          cell.className='cell';
+          cell.dataset.row=r;cell.dataset.col=c;
+          cell.style.cursor = selectedForPlacement!==null? 'pointer' : 'default';
+          cell.style.userSelect = 'none';
+          // create display input to match game grid sizing for both empty and letter cells
+          const disp = document.createElement('input');
+          disp.className = 'cell';
+          disp.tabIndex = -1;
+          disp.disabled = true;
+          disp.style.pointerEvents = 'none';
+          if(!val || val==='.'){
+            disp.value = '';
+          } else {
+            disp.value = val;
+          }
+          cell.textContent = '';
+          cell.appendChild(disp);
+          // highlight selected word placement origin
+          if(selectedForPlacement!==null){
+            const w = words[selectedForPlacement];
+            // preview attempt: if canPlaceAt, briefly indicate
+            // but only on hover we could do preview; keep simple: clicking will attempt placement
+          }
+          cell.addEventListener('click',()=>{
+            if(selectedForPlacement===null) return;
+            const idx = selectedForPlacement; const item = words[idx];
+            const sr = +cell.dataset.row, sc = +cell.dataset.col;
+            if(!canPlaceAt(item.word,sr,sc,item.direction,false)) return alert('Cannot place word here due to conflicts or adjacency rules');
+            placeWord(item.word,sr,sc,item.direction,0,item.id);
+            item.placed=true; item.row=sr; item.col=sc;
+            selectedForPlacement=null;
+            renderPlacementGrid(); renderWordList();
+          });
+          container.appendChild(cell);
+        }
+      }
     }
 
     function canPlaceAt(word,row,col,dir,requireIntersection=false){
@@ -94,13 +200,10 @@
         for(let i=0;i<word.length;i++){
           const r=row,c=col+i;
           const cell=grid[r][c];
+          // only conflict if different non-empty letter
           if(cell && cell!==word[i]) return false;
           if(cell && cell===word[i]) intersections++;
-          // adjacency checks
-          if(i===0 && c-1>=0 && grid[r][c-1] && grid[r][c-1]!=='.') return false;
-          if(i===word.length-1 && c+1<GRID_SIZE && grid[r][c+1] && grid[r][c+1]!=='.') return false;
-          if(r-1>=0 && grid[r-1][c] && grid[r-1][c]!=='.' && (!cell || cell==='.')) return false;
-          if(r+1<GRID_SIZE && grid[r+1][c] && grid[r+1][c]!=='.' && (!cell || cell==='.')) return false;
+          // adjacency checks removed to allow adjacent words; keep only strong conflicts above
         }
         if(requireIntersection){
           // enforce exactly one shared letter with existing grid
@@ -117,10 +220,7 @@
           const cell=grid[r][c];
           if(cell && cell!==word[i]) return false;
           if(cell && cell===word[i]) intersections++;
-          if(i===0 && r-1>=0 && grid[r-1][c] && grid[r-1][c]!=='.') return false;
-          if(i===word.length-1 && r+1<GRID_SIZE && grid[r+1][c] && grid[r+1][c]!=='.') return false;
-          if(c-1>=0 && grid[r][c-1] && grid[r][c-1]!=='.' && (!cell || cell==='.')) return false;
-          if(c+1<GRID_SIZE && grid[r][c+1] && grid[r][c+1]!=='.' && (!cell || cell==='.')) return false;
+          // adjacency checks removed to allow adjacent words
         }
         if(requireIntersection){
           return intersections===1;
@@ -133,13 +233,20 @@
     function placeWord(word,row,col,dir,num){
       if(dir==='across'){
         // place letters
-        for(let i=0;i<word.length;i++) grid[row][col+i]=word[i];
+        for(let i=0;i<word.length;i++){
+          grid[row][col+i]=word[i];
+          // record owner id if available
+          if(arguments.length>4 && arguments[4]) owners[row][col+i].push(arguments[4]);
+        }
         // mark number at starting cell if not already present
-        if(!numbers[row][col]) numbers[row][col]=num;
+        if(num && !numbers[row][col]) numbers[row][col]=num;
         // also ensure down word starting numbers are preserved (no overwrite)
       } else {
-        for(let i=0;i<word.length;i++) grid[row+i][col]=word[i];
-        if(!numbers[row][col]) numbers[row][col]=num;
+        for(let i=0;i<word.length;i++){
+          grid[row+i][col]=word[i];
+          if(arguments.length>4 && arguments[4]) owners[row+i][col].push(arguments[4]);
+        }
+        if(num && !numbers[row][col]) numbers[row][col]=num;
       }
     }
 
@@ -161,7 +268,7 @@
           r = Math.floor((GRID_SIZE - w.length)/2);
         }
         if(canPlaceAt(w,r,c,dir,false)){
-          placeWord(w,r,c,dir,clueNum);
+          placeWord(w,r,c,dir,clueNum,sorted[0].id);
           if(dir==='across') acrossClues.push({num:clueNum,clue:first.clue}); else downClues.push({num:clueNum,clue:first.clue});
           placed.push({word:w,row:r,col:c,direction:dir});clueNum++;
         } else {
@@ -170,7 +277,7 @@
           for(let rr=0;rr<GRID_SIZE;rr++){
             for(let cc=0;cc<GRID_SIZE;cc++){
               if(canPlaceAt(w,rr,cc,dir,false)){
-                placeWord(w,rr,cc,dir,clueNum);
+                placeWord(w,rr,cc,dir,clueNum,sorted[0].id);
                 if(dir==='across') acrossClues.push({num:clueNum,clue:first.clue}); else downClues.push({num:clueNum,clue:first.clue});
                 placed.push({word:w,row:rr,col:cc,direction:dir});clueNum++;break outer1;
               }
@@ -193,7 +300,7 @@
               const r = p.row + (p.direction==='down'? j:0) - (dir==='down'? i:0);
               const c = p.col + (p.direction==='across'? j:0) - (dir==='across'? i:0);
               if(canPlaceAt(w,r,c,dir,true)){
-                placeWord(w,r,c,dir,clueNum);
+                placeWord(w,r,c,dir,clueNum,sorted[idx].id);
                 if(dir==='across') acrossClues.push({num:clueNum,clue:item.clue}); else downClues.push({num:clueNum,clue:item.clue});
                 placed.push({word:w,row:r,col:c,direction:dir});clueNum++;placedOk=true;break;
               }
@@ -210,6 +317,36 @@
       return true;
     }
 
+    function arraysEqual(a,b){
+      if(!a && !b) return true;
+      if(!a || !b) return false;
+      if(a.length!==b.length) return false;
+      const sa = a.slice().sort(), sb = b.slice().sort();
+      for(let i=0;i<sa.length;i++) if(sa[i]!==sb[i]) return false;
+      return true;
+    }
+
+    // compute numbers and clues from currently placed words (manual placement)
+    function finalizeManualPlacementAndNumber(){
+      // ensure grid has blocks for empty cells
+      for(let r=0;r<GRID_SIZE;r++) for(let c=0;c<GRID_SIZE;c++) if(!grid[r][c]) grid[r][c]='.';
+      numbers = Array.from({length:GRID_SIZE},()=>Array(GRID_SIZE).fill(0));
+      acrossClues = []; downClues = [];
+      // build set of start positions
+      const starts = {};
+      for(const w of words){ if(w.placed){ starts[`${w.row},${w.col}`]=true; } }
+      let clueNum = 1;
+      for(let r=0;r<GRID_SIZE;r++){
+        for(let c=0;c<GRID_SIZE;c++){
+          if(grid[r][c]!=='.' && starts[`${r},${c}`]){ numbers[r][c]=clueNum++; }
+        }
+      }
+      // now assemble clues using numbers
+      for(const w of words){ if(w.placed){ const num = numbers[w.row][w.col]||0; if(w.direction==='across') acrossClues.push({num,num:num,clue:w.clue}); else downClues.push({num,num:num,clue:w.clue}); } }
+      // sort clues by num
+      acrossClues.sort((a,b)=>a.num-b.num); downClues.sort((a,b)=>a.num-b.num);
+    }
+
     function renderGrid(){
       const g = document.getElementById('grid');g.innerHTML='';
       g.style.gridTemplateColumns = `repeat(${GRID_SIZE}, var(--cell-size))`;
@@ -220,17 +357,38 @@
           if(val==='.'){
             const d=document.createElement('div');d.className='cell';d.setAttribute('disabled','true');g.appendChild(d);continue
           }
-          const input=document.createElement('input');input.maxLength=1;input.className='cell';input.dataset.row=r;input.dataset.col=c;input.autocomplete='off';
+          const input=document.createElement('input');
+          input.type = 'text';
+          input.maxLength=1;
+          input.className='cell';
+          input.dataset.row=r;input.dataset.col=c;input.autocomplete='off';
+          // ensure input is enabled and empty for user entry
+          input.value = '';
+          input.disabled = false;
+          input.readOnly = false;
+          input.tabIndex = 0;
+          input.style.pointerEvents = 'auto';
           input.addEventListener('input',()=>{input.value=input.value.replace(/[^A-Za-z]/g,'').toUpperCase();checkAnswers();});
           input.addEventListener('focus',()=>{input.select();});
           // if the cell is a starting number, wrap with number display
+          // wrap input so we can position number and custom borders
+          const wrapper=document.createElement('div');
+          wrapper.style.position='relative';wrapper.style.width='100%';wrapper.style.height='100%';
+          wrapper.appendChild(input);
           if(numbers[r][c]){
-            const wrapper=document.createElement('div');wrapper.style.position='relative';wrapper.style.width='100%';wrapper.style.height='100%';
             const num=document.createElement('span');num.className='number';num.textContent=numbers[r][c];
-            wrapper.appendChild(input);wrapper.appendChild(num);g.appendChild(wrapper);
-          } else {
-            g.appendChild(input);
+            wrapper.appendChild(num);
           }
+
+          // draw separators if owners exist and differ between adjacent cells
+          if(owners && owners[r]){
+            const thisOwners = owners[r][c]||[];
+            // right neighbor
+            if(c+1<GRID_SIZE){ const rightOwners = owners[r][c+1]||[]; if(!arraysEqual(thisOwners,rightOwners)) wrapper.style.borderRight = '2px solid rgba(0,0,0,0.06)'; }
+            // bottom neighbor
+            if(r+1<GRID_SIZE){ const botOwners = owners[r+1][c]||[]; if(!arraysEqual(thisOwners,botOwners)) wrapper.style.borderBottom = '2px solid rgba(0,0,0,0.06)'; }
+          }
+          g.appendChild(wrapper);
         }
       }
     }
@@ -271,12 +429,29 @@
       }
     }
 
-    function newPuzzle(){words=[];createEmptyGrid();renderWordList();document.getElementById('game').style.display='none';document.getElementById('setup').style.display='block'}
+  function newPuzzle(){words=[];createEmptyGrid();manualMode=false;selectedForPlacement=null;gameStarted=false;document.getElementById('placementArea').style.display='none';renderWordList();renderPlacementGrid();document.getElementById('game').style.display='none';document.getElementById('setup').style.display='block'}
 
     document.getElementById('add').addEventListener('click',addWord);
     document.getElementById('reset').addEventListener('click',()=>{words=[];createEmptyGrid();renderWordList()});
-    document.getElementById('generate').addEventListener('click',()=>{if(words.length<1) return alert('Add at least one word');createEmptyGrid();if(!generateCrossword()) return alert('Could not place words');document.getElementById('setup').style.display='none';document.getElementById('game').style.display='block';renderGrid();renderClues()});
+    document.getElementById('generate').addEventListener('click',()=>{
+      if(words.length<1) return alert('Add at least one word');
+      if(manualMode){
+        // when in manual mode, do not reset the grid (we've written letters during placement)
+        const anyPlaced = words.some(w=>w.placed);
+        if(!anyPlaced) return alert('Place at least one word before starting the game');
+        // finalize numbering and clues based on placed words
+        finalizeManualPlacementAndNumber();
+      } else {
+        // auto-generate: create and populate grid
+        createEmptyGrid();
+        if(!generateCrossword()) return alert('Could not place words');
+      }
+      gameStarted = true;
+      document.getElementById('setup').style.display='none';document.getElementById('placementArea').style.display='none';document.getElementById('game').style.display='block';
+      renderGrid();renderClues();
+    });
     document.getElementById('new').addEventListener('click',newPuzzle);
+    document.getElementById('manualPlace').addEventListener('click',enableManualPlacement);
 
     // init
     createEmptyGrid();renderWordList();
