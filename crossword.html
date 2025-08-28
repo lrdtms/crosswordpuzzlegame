@@ -21,6 +21,11 @@
     @media (max-width:640px){:root{--cell-size:24px}}
     .word-item{display:flex;justify-content:space-between;padding:6px;background:#f8fafc;margin-bottom:4px;border-radius:6px}
     .number{position:absolute;top:2px;left:4px;font-size:0.6em;color:#333}
+  /* highlight states for user input */
+  .cell.correct{background:#dcfce7;color:#064e3b;border-color:#86efac}
+  .cell.incorrect{background:#fee2e2;color:#7f1d1d;border-color:#fca5a5;animation:incorrect-pulse 450ms ease}
+  @keyframes incorrect-pulse{0%{transform:translateY(0)}25%{transform:translateY(-2px)}50%{transform:translateY(0)}75%{transform:translateY(-1px)}100%{transform:translateY(0)}}
+  .cell{transition:background-color 160ms ease,border-color 160ms ease,transform 120ms ease}
   </style>
 </head>
 <body>
@@ -47,7 +52,6 @@
       </div>
   <div id="winner" style="display:none;margin-top:12px;padding:10px;border-radius:6px;background:linear-gradient(90deg,#10b981,#06b6d4);color:#fff;font-weight:700"></div>
       <div style="margin-top:10px">
-        <button id="check">Check Answers</button>
         <button id="new">New Puzzle</button>
       </div>
     </div>
@@ -272,7 +276,6 @@
     document.getElementById('add').addEventListener('click',addWord);
     document.getElementById('reset').addEventListener('click',()=>{words=[];createEmptyGrid();renderWordList()});
     document.getElementById('generate').addEventListener('click',()=>{if(words.length<1) return alert('Add at least one word');createEmptyGrid();if(!generateCrossword()) return alert('Could not place words');document.getElementById('setup').style.display='none';document.getElementById('game').style.display='block';renderGrid();renderClues()});
-    document.getElementById('check').addEventListener('click',checkAnswers);
     document.getElementById('new').addEventListener('click',newPuzzle);
 
     // init
