@@ -131,7 +131,9 @@
       const d = document.getElementById('direction').value;
       if(!w||!c) return alert('Enter word and clue');
       if(!/^[A-Z]+$/.test(w)) return alert('Word must be letters only');
-  words.push({id: nextWordId++, word:w,clue:c,direction:d,placed:false,row:null,col:null});
+  const newWord = {id: nextWordId++, word:w,clue:c,direction:d,placed:false,row:null,col:null};
+  words.push(newWord);
+  console.debug('addWord:', newWord);
       document.getElementById('word').value='';document.getElementById('clue').value='';document.getElementById('word').focus();
       renderWordList();
     }
@@ -147,6 +149,7 @@
 
     function renderPlacementGrid(){
       const container = document.getElementById('placementGrid');
+      console.debug('renderPlacementGrid selectedForPlacement=', selectedForPlacement, 'words=', words.length);
       container.innerHTML='';
       container.style.display='grid';
       container.style.gridTemplateColumns = `repeat(${GRID_SIZE}, var(--cell-size))`;
@@ -184,6 +187,7 @@
             const sr = +cell.dataset.row, sc = +cell.dataset.col;
             if(!canPlaceAt(item.word,sr,sc,item.direction,false)) return alert('Cannot place word here due to conflicts or adjacency rules');
             placeWord(item.word,sr,sc,item.direction,0,item.id);
+            console.debug('manual placeWord:', item.word, 'id', item.id, 'at', sr, sc);
             item.placed=true; item.row=sr; item.col=sc;
             selectedForPlacement=null;
             renderPlacementGrid(); renderWordList();
@@ -238,6 +242,7 @@
           // record owner id if available
           if(arguments.length>4 && arguments[4]) owners[row][col+i].push(arguments[4]);
         }
+  if(arguments.length>4 && arguments[4]) console.debug('placeWord owners updated id=', arguments[4], 'range=', row, col, col+word.length-1);
         // mark number at starting cell if not already present
         if(num && !numbers[row][col]) numbers[row][col]=num;
         // also ensure down word starting numbers are preserved (no overwrite)
@@ -246,6 +251,7 @@
           grid[row+i][col]=word[i];
           if(arguments.length>4 && arguments[4]) owners[row+i][col].push(arguments[4]);
         }
+  if(arguments.length>4 && arguments[4]) console.debug('placeWord owners updated id=', arguments[4], 'range=', row, row+word.length-1, 'col=', col);
         if(num && !numbers[row][col]) numbers[row][col]=num;
       }
     }
@@ -269,6 +275,11 @@
         }
         if(canPlaceAt(w,r,c,dir,false)){
           placeWord(w,r,c,dir,clueNum,sorted[0].id);
+          // mark the source word object as placed so UI will draw borders
+          sorted[0].placed = true; sorted[0].row = r; sorted[0].col = c;
+          // find and mark original words entry
+          const orig0 = words.find(x=>x.id===sorted[0].id); if(orig0){ orig0.placed=true; orig0.row=r; orig0.col=c; }
+          console.debug('generate placed first', sorted[0].word, 'id', sorted[0].id, 'at', r, c);
           if(dir==='across') acrossClues.push({num:clueNum,clue:first.clue}); else downClues.push({num:clueNum,clue:first.clue});
           placed.push({word:w,row:r,col:c,direction:dir});clueNum++;
         } else {
@@ -278,6 +289,10 @@
             for(let cc=0;cc<GRID_SIZE;cc++){
               if(canPlaceAt(w,rr,cc,dir,false)){
                 placeWord(w,rr,cc,dir,clueNum,sorted[0].id);
+                // mark the source word object as placed
+                sorted[0].placed = true; sorted[0].row = rr; sorted[0].col = cc;
+                const orig0b = words.find(x=>x.id===sorted[0].id); if(orig0b){ orig0b.placed=true; orig0b.row=rr; orig0b.col=cc; }
+                console.debug('generate placed fallback', sorted[0].word, 'id', sorted[0].id, 'at', rr, cc);
                 if(dir==='across') acrossClues.push({num:clueNum,clue:first.clue}); else downClues.push({num:clueNum,clue:first.clue});
                 placed.push({word:w,row:rr,col:cc,direction:dir});clueNum++;break outer1;
               }
@@ -301,6 +316,10 @@
               const c = p.col + (p.direction==='across'? j:0) - (dir==='across'? i:0);
               if(canPlaceAt(w,r,c,dir,true)){
                 placeWord(w,r,c,dir,clueNum,sorted[idx].id);
+                // mark the source word object as placed
+                sorted[idx].placed = true; sorted[idx].row = r; sorted[idx].col = c;
+                const origi = words.find(x=>x.id===sorted[idx].id); if(origi){ origi.placed=true; origi.row=r; origi.col=c; }
+                console.debug('generate placed', sorted[idx].word, 'id', sorted[idx].id, 'at', r, c);
                 if(dir==='across') acrossClues.push({num:clueNum,clue:item.clue}); else downClues.push({num:clueNum,clue:item.clue});
                 placed.push({word:w,row:r,col:c,direction:dir});clueNum++;placedOk=true;break;
               }
@@ -328,6 +347,7 @@
 
     // compute numbers and clues from currently placed words (manual placement)
     function finalizeManualPlacementAndNumber(){
+  console.debug('finalizeManualPlacementAndNumber: start, words=', words.length);
       // ensure grid has blocks for empty cells
       for(let r=0;r<GRID_SIZE;r++) for(let c=0;c<GRID_SIZE;c++) if(!grid[r][c]) grid[r][c]='.';
       numbers = Array.from({length:GRID_SIZE},()=>Array(GRID_SIZE).fill(0));
@@ -345,9 +365,11 @@
       for(const w of words){ if(w.placed){ const num = numbers[w.row][w.col]||0; if(w.direction==='across') acrossClues.push({num,num:num,clue:w.clue}); else downClues.push({num,num:num,clue:w.clue}); } }
       // sort clues by num
       acrossClues.sort((a,b)=>a.num-b.num); downClues.sort((a,b)=>a.num-b.num);
+  console.debug('finalizeManualPlacementAndNumber: done, across=', acrossClues.length, 'down=', downClues.length);
     }
 
     function renderGrid(){
+  console.debug('renderGrid: start');
       const g = document.getElementById('grid');g.innerHTML='';
       g.style.gridTemplateColumns = `repeat(${GRID_SIZE}, var(--cell-size))`;
       g.style.gridTemplateRows = `repeat(${GRID_SIZE}, var(--cell-size))`;
@@ -380,17 +402,87 @@
             wrapper.appendChild(num);
           }
 
-          // draw separators if owners exist and differ between adjacent cells
-          if(owners && owners[r]){
-            const thisOwners = owners[r][c]||[];
-            // right neighbor
-            if(c+1<GRID_SIZE){ const rightOwners = owners[r][c+1]||[]; if(!arraysEqual(thisOwners,rightOwners)) wrapper.style.borderRight = '2px solid rgba(0,0,0,0.06)'; }
-            // bottom neighbor
-            if(r+1<GRID_SIZE){ const botOwners = owners[r+1][c]||[]; if(!arraysEqual(thisOwners,botOwners)) wrapper.style.borderBottom = '2px solid rgba(0,0,0,0.06)'; }
-          }
+          // tag wrapper with coordinates so we can address it later
+          wrapper.dataset.row = r; wrapper.dataset.col = c;
           g.appendChild(wrapper);
         }
       }
+  console.debug('renderGrid: rendered children=', g.children.length, 'gameStarted=', gameStarted);
+  if(gameStarted) setTimeout(drawWordBorders,120);
+    }
+  if(gameStarted) setTimeout(drawWordBorders,120);
+    
+    function drawWordBorders(){
+      // remove existing overlay if any
+      const gridEl = document.getElementById('grid');
+      let overlay = document.getElementById('wordBordersOverlay');
+      if(overlay) overlay.remove();
+      overlay = document.createElement('div');
+      overlay.id = 'wordBordersOverlay';
+      overlay.style.position = 'absolute';
+      overlay.style.left = '0'; overlay.style.top = '0'; overlay.style.right = '0'; overlay.style.bottom = '0';
+  overlay.style.pointerEvents = 'none';
+      overlay.style.zIndex = 50;
+      // ensure grid container can position overlay
+      gridEl.style.position = 'relative';
+      // compute overlay rectangles for each placed word
+      const gridRect = gridEl.getBoundingClientRect();
+    const placedWords = words.filter(w=>w.placed);
+    console.debug('drawWordBorders: placedWords=', placedWords.length, 'gridChildren=', gridEl.children.length);
+    placedWords.forEach(w=>{
+        const len = w.word.length;
+        if(w.direction==='across'){
+          const r = w.row; const c0 = w.col; const c1 = w.col + len - 1;
+      let first = gridEl.children[r * GRID_SIZE + c0];
+      let last = gridEl.children[r * GRID_SIZE + c1];
+      // fallback: try querySelector if children index lookup fails
+      if(!first) first = gridEl.querySelector(`[data-row="${r}"][data-col="${c0}"]`);
+      if(!last) last = gridEl.querySelector(`[data-row="${r}"][data-col="${c1}"]`);
+      if(!first || !last){ console.debug('drawWordBorders: could not find cells for', w); return; }
+          const fr = first.getBoundingClientRect();
+          const lr = last.getBoundingClientRect();
+          const left = fr.left - gridRect.left;
+          const top = fr.top - gridRect.top;
+          const right = lr.right - gridRect.left;
+          const bottom = lr.bottom - gridRect.top;
+          const box = document.createElement('div');
+          box.style.position='absolute';
+          box.style.left = left + 'px';
+          box.style.top = top + 'px';
+          box.style.width = (right - left) + 'px';
+      box.style.height = (bottom - top) + 'px';
+      box.style.border = '2px solid #000';
+      box.style.background = 'rgba(0,0,0,0.02)';
+          box.style.boxSizing = 'border-box';
+          box.style.borderRadius = '4px';
+          overlay.appendChild(box);
+        } else {
+          const c = w.col; const r0 = w.row; const r1 = w.row + len - 1;
+      let first = gridEl.children[r0 * GRID_SIZE + c];
+      let last = gridEl.children[r1 * GRID_SIZE + c];
+      if(!first) first = gridEl.querySelector(`[data-row="${r0}"][data-col="${c}"]`);
+      if(!last) last = gridEl.querySelector(`[data-row="${r1}"][data-col="${c}"]`);
+      if(!first || !last){ console.debug('drawWordBorders: could not find cells for', w); return; }
+          const fr = first.getBoundingClientRect();
+          const lr = last.getBoundingClientRect();
+          const left = fr.left - gridRect.left;
+          const top = fr.top - gridRect.top;
+          const right = lr.right - gridRect.left;
+          const bottom = lr.bottom - gridRect.top;
+          const box = document.createElement('div');
+          box.style.position='absolute';
+          box.style.left = left + 'px';
+          box.style.top = top + 'px';
+          box.style.width = (right - left) + 'px';
+      box.style.height = (bottom - top) + 'px';
+      box.style.border = '2px solid #000';
+      box.style.background = 'rgba(0,0,0,0.02)';
+          box.style.boxSizing = 'border-box';
+          box.style.borderRadius = '4px';
+          overlay.appendChild(box);
+        }
+      });
+      gridEl.appendChild(overlay);
     }
 
     function renderClues(){
@@ -454,7 +546,8 @@
     document.getElementById('manualPlace').addEventListener('click',enableManualPlacement);
 
     // init
-    createEmptyGrid();renderWordList();
+  createEmptyGrid();renderWordList();
+  window.addEventListener('resize',()=>{ if(gameStarted) setTimeout(drawWordBorders,120); });
   </script>
 </body>
 </html>
