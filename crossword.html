@@ -17,6 +17,18 @@
     button{background:transparent;border:1px solid transparent;color:#0b61d1;cursor:pointer}
     button:hover{background:rgba(11,97,209,0.06)}
     #grid{display:grid;gap:4px;background:transparent;margin:12px auto}
+    /* layout: place clues to the right of the grid in the game view */
+    #game{display:flex;gap:20px;align-items:flex-start}
+    /* ensure the grid stays left and doesn't center when in two-column layout */
+    #game #grid{margin:0}
+    /* clues column on the right */
+    .clues{flex:0 0 340px;max-width:340px;margin-top:0}
+    /* allow responsive stacking on narrow screens */
+    @media (max-width:880px){
+      #game{flex-direction:column}
+      .clues{flex:1;max-width:none}
+      #game #grid{margin:16px auto}
+    }
     /* cell visual - clean and subtle */
   .cell{width:var(--cell-size);height:var(--cell-size);text-align:center;font-weight:600;border:1px solid #e6e9ef;background:#fff;border-radius:4px;font-size:1rem;display:flex;align-items:center;justify-content:center}
     .cell[disabled]{background:#f3f4f6;border-color:#e8eaf0}
@@ -33,10 +45,9 @@
     @keyframes incorrect-pulse{0%{transform:translateY(0)}25%{transform:translateY(-2px)}50%{transform:translateY(0)}75%{transform:translateY(-1px)}100%{transform:translateY(0)}}
     .cell{transition:background-color 160ms ease,border-color 160ms ease,transform 120ms ease}
 
-    /* Game-specific minimal layout */
-    #game{display:block}
-    #game .panel{padding:0}
-    #grid{margin:16px auto}
+  /* Game-specific minimal layout */
+  #game .panel{padding:0}
+  #grid{margin:16px auto}
     /* center the clues and make compact */
     .clues{margin-top:12px;gap:28px}
     .clues strong{display:block;color:#111827;margin-bottom:6px;font-weight:600}
@@ -539,7 +550,7 @@
         if(!generateCrossword()) return alert('Could not place words');
       }
       gameStarted = true;
-      document.getElementById('setup').style.display='none';document.getElementById('placementArea').style.display='none';document.getElementById('game').style.display='block';
+  document.getElementById('setup').style.display='none';document.getElementById('placementArea').style.display='none';document.getElementById('game').style.display='flex';
       renderGrid();renderClues();
     });
     document.getElementById('new').addEventListener('click',newPuzzle);
