@@ -21,8 +21,8 @@
     #game{display:flex;gap:20px;align-items:flex-start}
     /* ensure the grid stays left and doesn't center when in two-column layout */
     #game #grid{margin:0}
-    /* clues column on the right */
-    .clues{flex:0 0 340px;max-width:340px;margin-top:0}
+  /* clues column on the right */
+  .clues{flex:0 0 340px;max-width:340px;margin-top:0;padding-right:12px;box-sizing:border-box;overflow-y:auto;max-height:calc(100vh - 140px);word-break:break-word;overflow-wrap:anywhere;white-space:normal}
     /* allow responsive stacking on narrow screens */
     @media (max-width:880px){
       #game{flex-direction:column}
